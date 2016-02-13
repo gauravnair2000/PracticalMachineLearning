@@ -1,0 +1,82 @@
+---
+title: "Coursera Practical Machine Learning Project"
+author: "Gaurav Nair"
+date: "February 13, 2016"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Background
+
+Using devices such as Jawbone Up, Nike FuelBand, and Fitbit it is now possible to collect a large amount of data about personal activity relatively inexpensively. These type of devices are part of the quantified self movement – a group of enthusiasts who take measurements about themselves regularly to improve their health, to find patterns in their behavior, or because they are tech geeks. One thing that people regularly do is quantify how much of a particular activity they do, but they rarely quantify how well they do it. In this project, your goal will be to use data from accelerometers on the belt, forearm, arm, and dumbell of 6 participants. They were asked to perform barbell lifts correctly and incorrectly in 5 different ways. 
+
+## Data
+
+The training data for this project are available here:
+
+https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv
+
+The test data are available here:
+
+https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv
+
+For the purpose of this project these files are already downloaded to the local hard-drive. For the following R code to work, the user must have pml-training.csv and pml-testing.csv, which has been downloaded from the above links, available in the working directory.
+
+
+```{r}
+trainingSet <- read.table("pml-training.csv", header=TRUE,sep=",")
+testingSet <- read.table("pml-testing.csv", header=TRUE,sep=",")
+dim(trainingSet)
+dim(testingSet)
+```
+It can be seen that there are 19622 entries in the training set and 20 in the testing set. Each entry has 160 features/columns. Let's split them into training and cross validation sets. Just like in the lecture videos we will make use of the createDataPartion in the caret packeage with 70% of the data in the training set and 30% in the cross validation set.
+```{r}
+library(ggplot2)
+library(lattice)
+library(caret)
+set.seed(7627)
+intrain<-createDataPartition(trainingSet$classe,p=0.7,list=FALSE)
+training<-trainingSet[intrain,]
+val<-trainingSet[-intrain,]
+```
+A quick look at the training data tells us that there many columns/features which dont impact the classe these can be identified using the nearZeroVar function.
+```{r}
+# exclude near zero variance features 
+removeCol <- nearZeroVar(training) 
+training <- training[, -removeCol]
+dim(training)
+```
+This reduces the number of columns to 104.
+Some columns have many missing values and NA entries. Also, there are some columns like user.name,timestamps etc which do not impact the outcome variable - classe. Let's exclude them.
+```{r}
+entryLength <- sapply(training, function(x) { sum(!(is.na(x) | x == "")) }) 
+emptyOrNA <- names(entryLength[entryLength < 0.7 * length(training$classe)]) 
+nameTimestamp <- c("X", "user_name", "raw_timestamp_part_1", "raw_timestamp_part_2","cvtd_timestamp", "new_window", "num_window") 
+rmv <- c(nameTimestamp,emptyOrNA ) 
+training <- training[, !names(training) %in% rmv]
+dim(training)
+```
+Now we have clean training set which is ready to be used to fit a model. Prediciting of the classe based on the reading from the accelerometers etc appears to be more of a logistic regression problem. Let's use the randomForest function t predict the classe.
+```{r}
+library(randomForest)
+fit<-randomForest(classe~.,data=training)
+predictTrain<-predict(fit,training)
+print(confusionMatrix(predictTrain,training$classe))
+```
+As expected, We can see that the training set shows 100% accuracy. Now let us find out the out-of-sample error in the cross-validation set.
+```{r}
+predictVal<-predict(fit,val)
+print(confusionMatrix(predictVal,val$classe))
+```
+Thaccuracy on the corss-validation set is 99.64%. Therefore the out-of-sample error is 0.36%. This is a good accuracy and acceptable out of sample error. Let's proceed to the testing set and predict the classe.
+```{r}
+predictTest<-predict(fit,testingSet)
+predictTest
+```
+#Conclusion
+
+A randomForest model was created using the training data that was available. The training data was split into a 70% training and 30% cross-validation sets. Columns with close to zero variance, the entries with more than 30% missing or NA value, columns with data containing names, timestamps etc were removed. The resulting randomForest model on the training data showed 100% accuracy. The same model when applied to the cross validation set showed 99.64% accuracy.
+This model was used to predict the classe for the testing data. 
